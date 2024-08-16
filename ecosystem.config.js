@@ -2,7 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'whapi', // Nombre de la aplicación
-      script: 'src/server.ts', // Ruta al archivo principal de tu aplicación
+      // script: 'src/server.ts', // Ruta al archivo principal de tu aplicación
+      script: 'node_modules/.bin/ts-node src/server.ts',
       interpreter: 'node', // Especifica el intérprete para archivos TypeScript
       instances: 'max', // Usa el máximo número de instancias posibles
       exec_mode: 'cluster', // Ejecuta en modo cluster para balanceo de carga
@@ -25,4 +26,5 @@ module.exports = {
       time: true, // Incluir timestamp en los logs
     },
   ],
+  
 }
