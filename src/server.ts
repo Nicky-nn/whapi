@@ -26,7 +26,7 @@ const startServer = async (): Promise<void> => {
   await server.start()
 
   // Aplicar el middleware de Apollo Server
-  server.applyMiddleware({ app, path: '/graphql' })
+  server.applyMiddleware({ app, path: '/whapi' })
 
   const PORT = process.env.PORT || 4000
   app.listen(PORT, () => {
