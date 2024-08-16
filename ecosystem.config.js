@@ -1,17 +1,18 @@
 module.exports = {
   apps: [
     {
-      name: 'whapi', // Nombre de la aplicación
-      script: 'src/server.ts', // Ruta al archivo principal de tu aplicación
-      instances: 'max', // Usa el máximo número de instancias posibles
-      exec_mode: 'cluster', // Ejecuta en modo cluster para balanceo de carga
+      name: 'whapi',
+      script: 'src/server.ts',
+      interpreter: 'bun', // Asegúrate de que `bun` esté en el PATH
+      instances: 'max',
+      exec_mode: 'cluster',
       env: {
-        NODE_ENV: 'development', // Configura el entorno de desarrollo
+        NODE_ENV: 'development',
         MONGODB_URI: 'mongodb://localhost:27017/whatsapp-bot-db',
         PORT: 4000,
       },
       env_production: {
-        NODE_ENV: 'production', // Configura el entorno de producción
+        NODE_ENV: 'production',
         MONGODB_URI: 'mongodb://localhost:27017/whatsapp-bot-db',
         PORT: 4000,
       },
