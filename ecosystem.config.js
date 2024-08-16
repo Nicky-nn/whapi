@@ -3,6 +3,7 @@ module.exports = {
     {
       name: 'whapi', // Nombre de la aplicación
       script: 'src/server.ts', // Ruta al archivo principal de tu aplicación
+      interpreter: 'node', // Especifica el intérprete para archivos TypeScript
       instances: 'max', // Usa el máximo número de instancias posibles
       exec_mode: 'cluster', // Ejecuta en modo cluster para balanceo de carga
       max_restarts: 5, // Máximo número de reinicios antes de detenerse
