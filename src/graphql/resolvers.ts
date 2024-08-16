@@ -86,10 +86,14 @@ const resolvers = {
       if (!user) throw new Error('Usuario no encontrado')
 
       const userId = user._id.toString()
-      const session = await WhatsAppSession.findOne({ userId: userId, isConnected: true })
+      let session = await WhatsAppSession.findOne({ userId: userId, isConnected: true })
 
       if (!session) {
-        throw new Error('No se encontró una sesión activa de WhatsApp para este usuario')
+        // Si no hay una sesión activa, eliminamos la sesión de la base de datos si existe
+        await WhatsAppSession.findOneAndDelete({ userId: userId })
+        throw new Error(
+          'La sesión de WhatsApp ha vencido. Por favor, inicie sesión nuevamente.',
+        )
       }
 
       if (!bots[userId]) {
@@ -97,7 +101,6 @@ const resolvers = {
         await bots[userId].initialize()
       }
 
-      // Esperar a que el cliente esté listo (máximo 30 segundos)
       const isReady = await bots[userId].waitForReady(30000)
       if (!isReady) {
         throw new Error('Tiempo de espera agotado. El cliente de WhatsApp no está listo.')
@@ -114,10 +117,8 @@ const resolvers = {
           let finalFileName: string
 
           if (mediaType === 'document') {
-            // Para documentos, usamos el nombre de archivo proporcionado o generamos uno
             finalFileName = fileName || `Documento_${Date.now()}.pdf`
           } else {
-            // Para imágenes y videos, usamos un nombre genérico sin extensión
             finalFileName = `${mediaType}_${Date.now()}`
           }
 

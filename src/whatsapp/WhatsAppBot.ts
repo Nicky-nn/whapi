@@ -1,4 +1,3 @@
-// WhatsAppBot.ts
 import path from 'path'
 import fs from 'fs'
 import mongoose from 'mongoose'
