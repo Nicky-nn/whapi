@@ -178,8 +178,16 @@ const resolvers = {
 
       const userId = user._id.toString()
       if (bots[userId]) {
-        await bots[userId].logout()
-        delete bots[userId]
+        try {
+          await bots[userId].logout() // Llama a la función de logout del bot para cerrar la sesión en WhatsApp
+          delete bots[userId] // Elimina el bot de la lista de bots
+          console.log(`Bot para el usuario ${username} eliminado correctamente.`)
+        } catch (error) {
+          console.error(
+            `Error al cerrar sesión y eliminar el bot para el usuario ${username}: ${(error as Error)?.message}`,
+          )
+          throw new Error('Hubo un problema al cerrar la sesión de WhatsApp.')
+        }
       }
       return true
     },

@@ -1,13 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 import mongoose from 'mongoose'
-import {
-  Client,
-  Message,
-  MessageMedia,
-  MessageSendOptions,
-  RemoteAuth,
-} from 'whatsapp-web.js'
+import { Client, Message, MessageMedia, RemoteAuth } from 'whatsapp-web.js'
 import qrcode from 'qrcode-terminal'
 import { MongoStore } from 'wwebjs-mongo'
 import WhatsAppSession from '../models/WhatsAppSession'
@@ -39,6 +33,16 @@ class WhatsAppBot {
     })
 
     this.setupEventListeners()
+
+    // Manejo de errores no capturados globalmente
+    process.on('unhandledRejection', async (reason: any, promise: Promise<any>) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+
+      // Cerrar la sesión del usuario si ocurre un error no manejado
+      if (this.isReady) {
+        await this.logout()
+      }
+    })
   }
 
   private setupEventListeners() {
@@ -70,16 +74,29 @@ class WhatsAppBot {
         )
       }
     })
+
+    // Manejar errores en la conexión y en la evaluación de funciones
+    this.client.on('auth_failure', async () => {
+      console.error(`Error de autenticación para el usuario: ${this.userId}`)
+      if (this.isReady) {
+        await this.logout()
+      }
+    })
   }
 
   public async initialize() {
-    const session = await WhatsAppSession.findOne({ userId: this.userId })
-    if (session && session.isConnected) {
-      console.log(`Sesión existente encontrada para el usuario: ${this.userId}`)
+    try {
+      const session = await WhatsAppSession.findOne({ userId: this.userId })
+      if (session && session.isConnected) {
+        console.log(`Sesión existente encontrada para el usuario: ${this.userId}`)
+        await this.client.initialize()
+        return
+      }
       await this.client.initialize()
-      return
+    } catch (error) {
+      console.error(`Error al inicializar el cliente: ${(error as Error).message}`)
+      await this.logout()
     }
-    await this.client.initialize()
   }
 
   public async waitForReady(timeout: number = 30000): Promise<boolean> {
@@ -137,11 +154,16 @@ class WhatsAppBot {
   }
 
   public async logout() {
-    await this.client.logout()
-    this.isReady = false
-    await this.updateSessionStatus(false)
-    await WhatsAppSession.findOneAndDelete({ userId: this.userId })
-    console.log(`Sesión cerrada para el usuario: ${this.userId}`)
+    try {
+      await this.client.logout() // Cierra sesión en WhatsApp
+      this.isReady = false
+      await this.updateSessionStatus(false)
+      await WhatsAppSession.findOneAndDelete({ userId: this.userId })
+      console.log(`Sesión de WhatsApp cerrada para el usuario: ${this.userId}`)
+    } catch (error: any) {
+      console.error(`Error al cerrar sesión en WhatsApp: ${error?.message}`)
+      throw new Error('No se pudo cerrar la sesión de WhatsApp correctamente.')
+    }
   }
 
   private async updateSessionStatus(isConnected: boolean) {
