@@ -34,6 +34,18 @@ const resolvers = {
         bots[userId] = new WhatsAppBot(userId)
         await bots[userId].initialize()
       }
+
+      // Esperar a que se genere el código QR (con un tiempo límite)
+      const maxWaitTime = 60000 // 60 segundos
+      const startTime = Date.now()
+
+      while (!bots[userId].getQRCode()) {
+        if (Date.now() - startTime > maxWaitTime) {
+          throw new Error('Tiempo de espera agotado para generar el código QR')
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000)) // Esperar 1 segundo antes de verificar de nuevo
+      }
+
       return bots[userId].getQRCode()
     },
     needsQRCode: async (_: any, { username }: { username: string }) => {
