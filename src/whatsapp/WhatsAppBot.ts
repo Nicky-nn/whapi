@@ -95,7 +95,21 @@ class WhatsAppBot {
       await this.client.initialize()
     } catch (error) {
       console.error(`Error al inicializar el cliente: ${(error as Error).message}`)
+      await this.handleSessionError()
+    }
+  }
+
+  private async handleSessionError() {
+    console.log(`Intentando eliminar la sesión y la cuenta del usuario: ${this.userId}`)
+    try {
+      // Cerrar sesión y eliminar la sesión de WhatsApp
       await this.logout()
+      // Eliminar el documento de la sesión en la base de datos
+      await WhatsAppSession.findOneAndDelete({ userId: this.userId })
+      console.log(`Sesión y cuenta eliminadas para el usuario: ${this.userId}`)
+    } catch (error) {
+      console.error(`Error al manejar el error de sesión: ${(error as Error).message}`)
+      // Si también hay un error al eliminar la cuenta, puede ser útil registrar esto o tomar medidas adicionales.
     }
   }
 
