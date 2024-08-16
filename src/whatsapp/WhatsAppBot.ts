@@ -34,11 +34,8 @@ class WhatsAppBot {
 
     this.setupEventListeners()
 
-    // Manejo de errores no capturados globalmente
     process.on('unhandledRejection', async (reason: any, promise: Promise<any>) => {
       console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-
-      // Cerrar la sesión del usuario si ocurre un error no manejado
       if (this.isReady) {
         await this.logout()
       }
@@ -75,7 +72,6 @@ class WhatsAppBot {
       }
     })
 
-    // Manejar errores en la conexión y en la evaluación de funciones
     this.client.on('auth_failure', async () => {
       console.error(`Error de autenticación para el usuario: ${this.userId}`)
       if (this.isReady) {
@@ -87,29 +83,62 @@ class WhatsAppBot {
   public async initialize() {
     try {
       const session = await WhatsAppSession.findOne({ userId: this.userId })
+
       if (session && session.isConnected) {
         console.log(`Sesión existente encontrada para el usuario: ${this.userId}`)
         await this.client.initialize()
-        return
+
+        const isSessionValid = await this.verifySession()
+
+        if (!isSessionValid) {
+          console.log(`Sesión inválida detectada para el usuario: ${this.userId}`)
+          await this.handleInvalidSession()
+          return
+        }
+      } else {
+        console.log(`Iniciando nueva sesión para el usuario: ${this.userId}`)
+        await this.client.initialize()
       }
-      await this.client.initialize()
     } catch (error) {
       console.error(`Error al inicializar el cliente: ${(error as Error).message}`)
       await this.handleSessionError()
     }
   }
 
+  private async verifySession(): Promise<boolean> {
+    try {
+      const state = await this.client.getState()
+      return state === 'CONNECTED'
+    } catch (error) {
+      console.error(`Error al verificar la sesión: ${(error as Error).message}`)
+      return false
+    }
+  }
+
+  private async handleInvalidSession() {
+    console.log(`Manejando sesión inválida para el usuario: ${this.userId}`)
+    await this.logout()
+    await this.clearSession()
+    await this.client.initialize()
+  }
+
+  private async clearSession() {
+    try {
+      await WhatsAppSession.findOneAndDelete({ userId: this.userId })
+      console.log(`Sesión eliminada para el usuario: ${this.userId}`)
+    } catch (error) {
+      console.error(`Error al eliminar la sesión: ${(error as Error).message}`)
+    }
+  }
+
   private async handleSessionError() {
     console.log(`Intentando eliminar la sesión y la cuenta del usuario: ${this.userId}`)
     try {
-      // Cerrar sesión y eliminar la sesión de WhatsApp
       await this.logout()
-      // Eliminar el documento de la sesión en la base de datos
       await WhatsAppSession.findOneAndDelete({ userId: this.userId })
       console.log(`Sesión y cuenta eliminadas para el usuario: ${this.userId}`)
     } catch (error) {
       console.error(`Error al manejar el error de sesión: ${(error as Error).message}`)
-      // Si también hay un error al eliminar la cuenta, puede ser útil registrar esto o tomar medidas adicionales.
     }
   }
 
@@ -146,17 +175,14 @@ class WhatsAppBot {
       let message
 
       if (options?.media) {
-        // Si hay media, enviar como media con o sin footer.
         const caption = options.footer ? `${text}\n\n${options.footer}` : text
         message = await this.client.sendMessage(`${to}@c.us`, options.media, { caption })
       } else if (options?.footer) {
-        // Si solo hay footer, enviar texto con footer.
         message = await this.client.sendMessage(
           `${to}@c.us`,
           `${text}\n\n${options.footer}`,
         )
       } else {
-        // Si no hay media ni footer, enviar texto simple.
         message = await this.client.sendMessage(`${to}@c.us`, text)
       }
 
@@ -169,7 +195,7 @@ class WhatsAppBot {
 
   public async logout() {
     try {
-      await this.client.logout() // Cierra sesión en WhatsApp
+      await this.client.logout()
       this.isReady = false
       await this.updateSessionStatus(false)
       await WhatsAppSession.findOneAndDelete({ userId: this.userId })
