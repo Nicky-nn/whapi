@@ -20,6 +20,10 @@ const typeDefs = gql`
     """
     createUser(username: String!): User
     """
+    Elimina un usuario de la base de datos y desconecta de WhatsApp."
+    """
+    deleteAccount(username: String!): Boolean
+    """
     Envía un mensaje a un contacto de WhatsApp.
     username: Nombre de usuario del remitente.
     to: Número de teléfono del destinatario.

@@ -35,15 +35,17 @@ const resolvers = {
         await bots[userId].initialize()
       }
 
-      // Esperar a que se genere el código QR (con un tiempo límite)
       const maxWaitTime = 60000 // 60 segundos
       const startTime = Date.now()
 
       while (!bots[userId].getQRCode()) {
         if (Date.now() - startTime > maxWaitTime) {
+          console.error(
+            `Tiempo de espera agotado para generar el código QR para el usuario ${userId}`,
+          )
           throw new Error('Tiempo de espera agotado para generar el código QR')
         }
-        await new Promise((resolve) => setTimeout(resolve, 1000)) // Esperar 1 segundo antes de verificar de nuevo
+        await new Promise((resolve) => setTimeout(resolve, 1000))
       }
 
       return bots[userId].getQRCode()
@@ -76,6 +78,21 @@ const resolvers = {
         whatsappConnected: false,
       }
     },
+    deleteAccount: async (_: any, { username }: { username: string }) => {
+      const user = await User.findOne({ username })
+      if (!user) throw new Error('Usuario no encontrado')
+
+      // Eliminar al usuario de la base de datos y desconectar de WhatsApp y todo lo relacionado
+      const userId = user._id.toString()
+      if (bots[userId]) {
+        await bots[userId].logout()
+        delete bots[userId]
+      }
+      await WhatsAppSession.findOneAndDelete({ userId: userId })
+      await User.findByIdAndDelete(user._id)
+      return true
+    },
+
     sendMessage: async (
       _: any,
       {
