@@ -1,30 +1,29 @@
 module.exports = {
   apps: [
     {
-      name: 'whapi', // Nombre de la aplicación
-      // script: 'src/server.ts', // Ruta al archivo principal de tu aplicación
-      script: 'node_modules/.bin/ts-node src/server.ts',
-      interpreter: 'node', // Especifica el intérprete para archivos TypeScript
-      instances: 'max', // Usa el máximo número de instancias posibles
-      exec_mode: 'cluster', // Ejecuta en modo cluster para balanceo de carga
-      max_restarts: 5, // Máximo número de reinicios antes de detenerse
-      restart_delay: 1000, // Tiempo de espera entre reinicios (en milisegundos)
-      watch: false, // Desactiva el reinicio automático al detectar cambios en archivos
+      name: 'whapi',
+      script: 'node_modules/.bin/ts-node',
+      args: 'src/server.ts',
+      interpreter: 'node',
+      instances: 'max',
+      exec_mode: 'cluster',
+      max_restarts: 5,
+      restart_delay: 1000,
+      watch: false,
       env: {
-        NODE_ENV: 'development', // Configura el entorno de desarrollo
+        NODE_ENV: 'development',
         MONGODB_URI: 'mongodb://localhost:27017/whatsapp-bot-db',
         PORT: 4000,
       },
       env_production: {
-        NODE_ENV: 'production', // Configura el entorno de producción
+        NODE_ENV: 'production',
         MONGODB_URI: 'mongodb://localhost:27017/whatsapp-bot-db',
         PORT: 4000,
       },
-      error_file: './logs/whapi-err.log', // Archivo de log para errores
-      out_file: './logs/whapi-out.log', // Archivo de log para la salida estándar
-      log_file: './logs/whapi-combined.log', // Archivo de log combinado
-      time: true, // Incluir timestamp en los logs
+      error_file: './logs/whapi-err.log',
+      out_file: './logs/whapi-out.log',
+      log_file: './logs/whapi-combined.log',
+      time: true,
     },
   ],
-  
 }
