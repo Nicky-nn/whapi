@@ -70,53 +70,16 @@ class WhatsAppBot {
         )
       }
     })
-
-    this.client.on('auth_failure', async () => {
-      console.log(`Fallo de autenticación para el usuario: ${this.userId}`)
-      await this.deleteCredentials()
-      this.isReady = false
-      // Reiniciar el proceso de autenticación
-      await this.initialize()
-    })
   }
 
-  public async initialize(maxRetries = 3): Promise<boolean> {
-    let retries = 0
-
-    while (retries < maxRetries) {
-      try {
-        const session = await WhatsAppSession.findOne({ userId: this.userId })
-        if (session && session.isConnected) {
-          console.log(`Sesión existente encontrada para el usuario: ${this.userId}`)
-        }
-
-        await this.client.initialize()
-
-        // Esperar a que el cliente esté listo
-        const isReady = await this.waitForReady(60000) // 60 segundos de timeout
-
-        if (isReady) {
-          console.log(`Inicialización exitosa para el usuario: ${this.userId}`)
-          return true
-        } else {
-          throw new Error('Timeout esperando que el cliente esté listo')
-        }
-      } catch (error) {
-        console.error(`Error en el intento ${retries + 1}: ${(error as Error).message}`)
-        await this.deleteCredentials()
-        retries++
-
-        if (retries >= maxRetries) {
-          console.error(`Máximo de intentos alcanzado para el usuario: ${this.userId}`)
-          return false
-        }
-
-        // Esperar antes de reintentar
-        await new Promise((resolve) => setTimeout(resolve, 5000))
-      }
+  public async initialize() {
+    const session = await WhatsAppSession.findOne({ userId: this.userId })
+    if (session && session.isConnected) {
+      console.log(`Sesión existente encontrada para el usuario: ${this.userId}`)
+      await this.client.initialize()
+      return
     }
-
-    return false
+    await this.client.initialize()
   }
 
   public async waitForReady(timeout: number = 30000): Promise<boolean> {
@@ -177,7 +140,7 @@ class WhatsAppBot {
     await this.client.logout()
     this.isReady = false
     await this.updateSessionStatus(false)
-    await this.deleteCredentials()
+    await WhatsAppSession.findOneAndDelete({ userId: this.userId })
     console.log(`Sesión cerrada para el usuario: ${this.userId}`)
   }
 
@@ -202,22 +165,6 @@ class WhatsAppBot {
       return true
     }
     return false
-  }
-
-  private async deleteCredentials() {
-    try {
-      await WhatsAppSession.findOneAndDelete({ userId: this.userId })
-      console.log(`Credenciales borradas para el usuario: ${this.userId}`)
-    } catch (error) {
-      console.error(`Error al borrar credenciales: ${(error as Error).message}`)
-    }
-  }
-
-  public async restartAuthentication() {
-    console.log(`Reiniciando autenticación para el usuario: ${this.userId}`)
-    await this.logout()
-    await this.deleteCredentials()
-    return await this.initialize()
   }
 }
 
