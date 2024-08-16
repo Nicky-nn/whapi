@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'whapi',
       script: 'src/server.ts',
-      interpreter: 'node', // Asegúrate de que `bun` esté en el PATH
+      interpreter: 'ts-node', // Cambiado a `ts-node`
       instances: 'max',
       exec_mode: 'cluster',
       env: {
