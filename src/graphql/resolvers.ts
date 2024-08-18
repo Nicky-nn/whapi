@@ -34,20 +34,6 @@ const resolvers = {
         bots[userId] = new WhatsAppBot(userId)
         await bots[userId].initialize()
       }
-
-      const maxWaitTime = 60000 // 60 segundos
-      const startTime = Date.now()
-
-      while (!bots[userId].getQRCode()) {
-        if (Date.now() - startTime > maxWaitTime) {
-          console.error(
-            `Tiempo de espera agotado para generar el código QR para el usuario ${userId}`,
-          )
-          throw new Error('Tiempo de espera agotado para generar el código QR')
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      }
-
       return bots[userId].getQRCode()
     },
     needsQRCode: async (_: any, { username }: { username: string }) => {
@@ -61,7 +47,6 @@ const resolvers = {
     createUser: async (_: any, { username }: { username: string }) => {
       // Convertir el nombre de usuario a minúsculas
       const lowerUsername = username.toLowerCase()
-
       // Verificar si el usuario ya existe en la base de datos
       const existingUser = await User.findOne({ username: lowerUsername })
       if (existingUser) {
@@ -78,21 +63,6 @@ const resolvers = {
         whatsappConnected: false,
       }
     },
-    deleteAccount: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username })
-      if (!user) throw new Error('Usuario no encontrado')
-
-      // Eliminar al usuario de la base de datos y desconectar de WhatsApp y todo lo relacionado
-      const userId = user._id.toString()
-      if (bots[userId]) {
-        await bots[userId].logout()
-        delete bots[userId]
-      }
-      await WhatsAppSession.findOneAndDelete({ userId: userId })
-      await User.findByIdAndDelete(user._id)
-      return true
-    },
-
     sendMessage: async (
       _: any,
       {
@@ -115,23 +85,21 @@ const resolvers = {
       if (!user) throw new Error('Usuario no encontrado')
 
       const userId = user._id.toString()
-      let session = await WhatsAppSession.findOne({ userId: userId, isConnected: true })
+      const session = await WhatsAppSession.findOne({ userId: userId, isConnected: true })
 
       if (!session) {
-        // Si no hay una sesión activa, eliminamos la sesión de la base de datos si existe
-        await WhatsAppSession.findOneAndDelete({ userId: userId })
-        throw new Error(
-          'La sesión de WhatsApp ha vencido. Por favor, inicie sesión nuevamente.',
-        )
+        throw new Error('No se encontró una sesión activa de WhatsApp para este usuario')
       }
 
       if (!bots[userId]) {
         bots[userId] = new WhatsAppBot(userId)
         await bots[userId].initialize()
       }
-
+      // Esperar a que el cliente esté listo (máximo 30 segundos)
       const isReady = await bots[userId].waitForReady(30000)
       if (!isReady) {
+        await bots[userId].logout()
+        delete bots[userId]
         throw new Error('Tiempo de espera agotado. El cliente de WhatsApp no está listo.')
       }
 
@@ -146,8 +114,10 @@ const resolvers = {
           let finalFileName: string
 
           if (mediaType === 'document') {
+            // Para documentos, usamos el nombre de archivo proporcionado o generamos uno
             finalFileName = fileName || `Documento_${Date.now()}.pdf`
           } else {
+            // Para imágenes y videos, usamos un nombre genérico sin extensión
             finalFileName = `${mediaType}_${Date.now()}`
           }
 
@@ -178,16 +148,8 @@ const resolvers = {
 
       const userId = user._id.toString()
       if (bots[userId]) {
-        try {
-          await bots[userId].logout() // Llama a la función de logout del bot para cerrar la sesión en WhatsApp
-          delete bots[userId] // Elimina el bot de la lista de bots
-          console.log(`Bot para el usuario ${username} eliminado correctamente.`)
-        } catch (error) {
-          console.error(
-            `Error al cerrar sesión y eliminar el bot para el usuario ${username}: ${(error as Error)?.message}`,
-          )
-          throw new Error('Hubo un problema al cerrar la sesión de WhatsApp.')
-        }
+        await bots[userId].logout()
+        delete bots[userId]
       }
       return true
     },

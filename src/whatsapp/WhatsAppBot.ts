@@ -1,9 +1,7 @@
-import path from 'path'
-import fs from 'fs'
-import mongoose from 'mongoose'
 import { Client, Message, MessageMedia, RemoteAuth } from 'whatsapp-web.js'
 import qrcode from 'qrcode-terminal'
 import { MongoStore } from 'wwebjs-mongo'
+import mongoose from 'mongoose'
 import WhatsAppSession from '../models/WhatsAppSession'
 
 class WhatsAppBot {
@@ -12,6 +10,8 @@ class WhatsAppBot {
   private qrCode: string | null = null
   private lastActivityTimestamp: number
   private isReady: boolean = false
+  private initializationAttempts: number = 0
+  private maxInitializationAttempts: number = 3
 
   constructor(userId: string) {
     this.userId = userId
@@ -33,35 +33,30 @@ class WhatsAppBot {
     })
 
     this.setupEventListeners()
-
-    process.on('unhandledRejection', async (reason: any, promise: Promise<any>) => {
-      console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-      if (this.isReady) {
-        await this.logout()
-      }
-    })
   }
 
   private setupEventListeners() {
     this.client.on('qr', (qr) => {
-      this.qrCode = qr
-      qrcode.generate(qr, { small: true })
-      console.log(`Código QR generado para el usuario: ${this.userId}`)
+      if (!this.isReady) {
+        this.qrCode = qr
+        qrcode.generate(qr, { small: true })
+        console.log(`Código QR generado para el usuario: ${this.userId}`)
+      }
     })
 
-    this.client.on('ready', async () => {
+    this.client.on('ready', () => {
       console.log(`Conexión exitosa para el usuario: ${this.userId}`)
       this.isReady = true
-      await this.updateSessionStatus(true)
+      this.updateSessionStatus(true)
     })
 
-    this.client.on('disconnected', async () => {
+    this.client.on('disconnected', () => {
       console.log(`Cliente desconectado para el usuario: ${this.userId}`)
       this.isReady = false
-      await this.updateSessionStatus(false)
+      this.updateSessionStatus(false)
     })
 
-    this.client.on('message', (message) => {
+    this.client.on('message', (message: Message) => {
       this.lastActivityTimestamp = Date.now()
       console.log(`Mensaje recibido para el usuario ${this.userId}: ${message.body}`)
       if (message.body === 'hola mundo') {
@@ -71,81 +66,42 @@ class WhatsAppBot {
         )
       }
     })
-
-    this.client.on('auth_failure', async () => {
-      console.error(`Error de autenticación para el usuario: ${this.userId}`)
-      if (this.isReady) {
-        await this.logout()
-      }
-    })
   }
 
   public async initialize() {
-    try {
-      const session = await WhatsAppSession.findOne({ userId: this.userId })
-
-      if (session && session.isConnected) {
-        console.log(`Sesión existente encontrada para el usuario: ${this.userId}`)
-        await this.client.initialize()
-
-        const isSessionValid = await this.verifySession()
-
-        if (!isSessionValid) {
-          console.log(`Sesión inválida detectada para el usuario: ${this.userId}`)
-          await this.handleInvalidSession()
-          return
+    while (this.initializationAttempts < this.maxInitializationAttempts) {
+      try {
+        console.log(
+          `Intento de inicialización ${this.initializationAttempts + 1} para el usuario: ${this.userId}`,
+        )
+        const session = await WhatsAppSession.findOne({ userId: this.userId })
+        if (session && session.isConnected) {
+          console.log(`Sesión existente encontrada para el usuario: ${this.userId}`)
         }
-      } else {
-        console.log(`Iniciando nueva sesión para el usuario: ${this.userId}`)
         await this.client.initialize()
+        console.log(`Cliente inicializado con éxito para el usuario: ${this.userId}`)
+        return
+      } catch (error) {
+        console.error(
+          `Error al inicializar el cliente para el usuario ${this.userId}:`,
+          error,
+        )
+        this.initializationAttempts++
+        if (this.initializationAttempts >= this.maxInitializationAttempts) {
+          throw new Error(
+            `No se pudo inicializar el cliente después de ${this.maxInitializationAttempts} intentos`,
+          )
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5000)) // Esperar 5 segundos antes de reintentar
       }
-    } catch (error) {
-      console.error(`Error al inicializar el cliente: ${(error as Error).message}`)
-      await this.handleSessionError()
     }
   }
 
-  private async verifySession(): Promise<boolean> {
-    try {
-      const state = await this.client.getState()
-      return state === 'CONNECTED'
-    } catch (error) {
-      console.error(`Error al verificar la sesión: ${(error as Error).message}`)
-      return false
-    }
-  }
-
-  private async handleInvalidSession() {
-    console.log(`Manejando sesión inválida para el usuario: ${this.userId}`)
-    await this.logout()
-    await this.clearSession()
-    await this.client.initialize()
-  }
-
-  private async clearSession() {
-    try {
-      await WhatsAppSession.findOneAndDelete({ userId: this.userId })
-      console.log(`Sesión eliminada para el usuario: ${this.userId}`)
-    } catch (error) {
-      console.error(`Error al eliminar la sesión: ${(error as Error).message}`)
-    }
-  }
-
-  private async handleSessionError() {
-    console.log(`Intentando eliminar la sesión y la cuenta del usuario: ${this.userId}`)
-    try {
-      await this.logout()
-      await WhatsAppSession.findOneAndDelete({ userId: this.userId })
-      console.log(`Sesión y cuenta eliminadas para el usuario: ${this.userId}`)
-    } catch (error) {
-      console.error(`Error al manejar el error de sesión: ${(error as Error).message}`)
-    }
-  }
-
-  public async waitForReady(timeout: number = 30000): Promise<boolean> {
+  public async waitForReady(timeout: number = 60000): Promise<boolean> {
     const startTime = Date.now()
     while (!this.isReady) {
       if (Date.now() - startTime > timeout) {
+        console.log(`Tiempo de espera agotado para el usuario: ${this.userId}`)
         return false
       }
       await new Promise((resolve) => setTimeout(resolve, 1000))
@@ -186,33 +142,25 @@ class WhatsAppBot {
         message = await this.client.sendMessage(`${to}@c.us`, text)
       }
 
+      console.log(`Mensaje enviado con éxito para el usuario ${this.userId}`)
       return message
     } catch (error) {
-      console.error(`Error al enviar mensaje: ${(error as Error).message}`)
+      console.error(`Error al enviar mensaje para el usuario ${this.userId}:`, error)
       throw new Error('No se pudo enviar el mensaje. Por favor, intente nuevamente.')
     }
   }
 
   public async logout() {
-    try {
-      await this.client.logout()
-      this.isReady = false
-      await this.updateSessionStatus(false)
-      await WhatsAppSession.findOneAndDelete({ userId: this.userId })
-      console.log(`Sesión de WhatsApp cerrada para el usuario: ${this.userId}`)
-    } catch (error: any) {
-      console.error(`Error al cerrar sesión en WhatsApp: ${error?.message}`)
-      throw new Error('No se pudo cerrar la sesión de WhatsApp correctamente.')
-    }
+    await this.client.logout()
+    this.isReady = false
+    await this.updateSessionStatus(false)
+    console.log(`Sesión cerrada para el usuario: ${this.userId}`)
   }
 
   private async updateSessionStatus(isConnected: boolean) {
     await WhatsAppSession.findOneAndUpdate(
       { userId: this.userId },
-      {
-        isConnected,
-        sessionData: isConnected ? 'connected' : null,
-      },
+      { isConnected },
       { upsert: true, new: true },
     )
   }
