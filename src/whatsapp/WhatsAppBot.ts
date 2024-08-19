@@ -3,6 +3,8 @@ import qrcode from 'qrcode-terminal'
 import { MongoStore } from 'wwebjs-mongo'
 import mongoose from 'mongoose'
 import WhatsAppSession from '../models/WhatsAppSession'
+import fs from 'fs/promises'
+import path from 'path'
 
 class WhatsAppBot {
   private client: Client
@@ -12,6 +14,8 @@ class WhatsAppBot {
   private isReady: boolean = false
   private initializationAttempts: number = 0
   private maxInitializationAttempts: number = 3
+  private sessionClosedTimestamp: number | null = null
+  private static readonly SESSION_COOLDOWN = 60000 // 1 minuto en milisegundos
 
   constructor(userId: string) {
     this.userId = userId
@@ -50,10 +54,16 @@ class WhatsAppBot {
       this.updateSessionStatus(true)
     })
 
-    this.client.on('disconnected', () => {
-      console.log(`Cliente desconectado para el usuario: ${this.userId}`)
-      this.isReady = false
-      this.updateSessionStatus(false)
+    this.client.on('disconnected', async (reason) => {
+      console.log(
+        `Cliente desconectado para el usuario: ${this.userId}. Razón: ${reason}`,
+      )
+      await this.handleSessionClosure()
+    })
+
+    this.client.on('auth_failure', async () => {
+      console.log(`Fallo de autenticación detectado para el usuario: ${this.userId}`)
+      await this.handleSessionClosure()
     })
 
     this.client.on('message', (message: Message) => {
@@ -69,15 +79,20 @@ class WhatsAppBot {
   }
 
   public async initialize() {
+    if (!this.canRequestQR()) {
+      console.log(
+        `El usuario ${this.userId} debe esperar antes de inicializar una nueva sesión`,
+      )
+      return
+    }
+
     while (this.initializationAttempts < this.maxInitializationAttempts) {
       try {
         console.log(
           `Intento de inicialización ${this.initializationAttempts + 1} para el usuario: ${this.userId}`,
         )
-        const session = await WhatsAppSession.findOne({ userId: this.userId })
-        if (session && session.isConnected) {
-          console.log(`Sesión existente encontrada para el usuario: ${this.userId}`)
-        }
+        await this.deleteSessionFiles() // Eliminar archivos de sesión antes de inicializar
+        await this.removeSessionFromDB() // Eliminar sesión de la base de datos antes de inicializar
         await this.client.initialize()
         console.log(`Cliente inicializado con éxito para el usuario: ${this.userId}`)
         return
@@ -110,6 +125,12 @@ class WhatsAppBot {
   }
 
   public getQRCode(): string | null {
+    if (!this.canRequestQR()) {
+      console.log(
+        `El usuario ${this.userId} debe esperar antes de solicitar un nuevo código QR`,
+      )
+      return null
+    }
     return this.qrCode
   }
 
@@ -152,8 +173,7 @@ class WhatsAppBot {
 
   public async logout() {
     await this.client.logout()
-    this.isReady = false
-    await this.updateSessionStatus(false)
+    await this.handleSessionClosure()
     console.log(`Sesión cerrada para el usuario: ${this.userId}`)
   }
 
@@ -175,6 +195,56 @@ class WhatsAppBot {
       return true
     }
     return false
+  }
+
+  private async handleSessionClosure() {
+    console.log(`Manejando cierre de sesión para el usuario: ${this.userId}`)
+    this.sessionClosedTimestamp = Date.now()
+    this.isReady = false
+    this.qrCode = null
+    await this.deleteSessionFiles()
+    await this.removeSessionFromDB()
+    await this.updateSessionStatus(false)
+  }
+
+  private async deleteSessionFiles() {
+    try {
+      const sessionDir = path.join(process.cwd(), '.wwebjs_auth', this.userId)
+      await fs.rm(sessionDir, { recursive: true, force: true })
+      console.log(`Archivos de sesión eliminados para el usuario: ${this.userId}`)
+    } catch (error) {
+      console.error(
+        `Error al eliminar archivos de sesión para el usuario ${this.userId}:`,
+        error,
+      )
+    }
+  }
+
+  private async removeSessionFromDB() {
+    try {
+      await WhatsAppSession.findOneAndDelete({ userId: this.userId })
+      console.log(`Sesión eliminada de la base de datos para el usuario: ${this.userId}`)
+    } catch (error) {
+      console.error(
+        `Error al eliminar sesión de la base de datos para el usuario ${this.userId}:`,
+        error,
+      )
+    }
+  }
+
+  public canRequestQR(): boolean {
+    if (this.sessionClosedTimestamp === null) {
+      return true
+    }
+    const timeSinceClosure = Date.now() - this.sessionClosedTimestamp
+    return timeSinceClosure >= WhatsAppBot.SESSION_COOLDOWN
+  }
+
+  public async forceReset() {
+    await this.handleSessionClosure()
+    this.sessionClosedTimestamp = null // Permitir una nueva inicialización inmediata
+    this.initializationAttempts = 0 // Reiniciar el contador de intentos
+    await this.initialize()
   }
 }
 

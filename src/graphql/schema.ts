@@ -40,6 +40,11 @@ const typeDefs = gql`
       fileName: String
     ): Boolean
     logout(username: String!): Boolean
+    """
+    Fuerza el reinicio del bot de WhatsApp.
+    Devuelve un mensaje indicando el éxito o el fallo de la operación.
+    """
+    forceReset(username: String!): String
   }
 `
 

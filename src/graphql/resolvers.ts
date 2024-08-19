@@ -10,7 +10,7 @@ const bots: { [key: string]: WhatsAppBot } = {}
 const resolvers = {
   Query: {
     getUser: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username })
+      const user = await User.findOne({ username: username.toLowerCase() })
       if (!user) throw new Error('Usuario no encontrado')
       const whatsAppSession = await WhatsAppSession.findOne({ userId: user._id })
       return {
@@ -20,7 +20,7 @@ const resolvers = {
       }
     },
     getQRCode: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username })
+      const user = await User.findOne({ username: username.toLowerCase() })
       if (!user) throw new Error('Usuario no encontrado')
 
       const userId = user._id.toString()
@@ -37,7 +37,7 @@ const resolvers = {
       return bots[userId].getQRCode()
     },
     needsQRCode: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username })
+      const user = await User.findOne({ username: username.toLowerCase() })
       if (!user) throw new Error('Usuario no encontrado')
       const whatsAppSession = await WhatsAppSession.findOne({ userId: user._id })
       return !whatsAppSession || !whatsAppSession.isConnected
@@ -45,15 +45,12 @@ const resolvers = {
   },
   Mutation: {
     createUser: async (_: any, { username }: { username: string }) => {
-      // Convertir el nombre de usuario a minúsculas
       const lowerUsername = username.toLowerCase()
-      // Verificar si el usuario ya existe en la base de datos
       const existingUser = await User.findOne({ username: lowerUsername })
       if (existingUser) {
         throw new Error('El nombre de usuario ya está registrado.')
       }
 
-      // Crear un nuevo usuario si no existe
       const user = new User({ username: lowerUsername })
       await user.save()
 
@@ -81,7 +78,7 @@ const resolvers = {
         fileName?: string
       },
     ) => {
-      const user = await User.findOne({ username })
+      const user = await User.findOne({ username: username.toLowerCase() })
       if (!user) throw new Error('Usuario no encontrado')
 
       const userId = user._id.toString()
@@ -95,7 +92,7 @@ const resolvers = {
         bots[userId] = new WhatsAppBot(userId)
         await bots[userId].initialize()
       }
-      // Esperar a que el cliente esté listo (máximo 30 segundos)
+
       const isReady = await bots[userId].waitForReady(30000)
       if (!isReady) {
         await bots[userId].logout()
@@ -111,15 +108,10 @@ const resolvers = {
           const buffer = await response.arrayBuffer()
           const mimetype = response.headers.get('content-type') || ''
 
-          let finalFileName: string
-
-          if (mediaType === 'document') {
-            // Para documentos, usamos el nombre de archivo proporcionado o generamos uno
-            finalFileName = fileName || `Documento_${Date.now()}.pdf`
-          } else {
-            // Para imágenes y videos, usamos un nombre genérico sin extensión
-            finalFileName = `${mediaType}_${Date.now()}`
-          }
+          const finalFileName =
+            mediaType === 'document'
+              ? fileName || `Documento_${Date.now()}.pdf`
+              : `${mediaType}_${Date.now()}`
 
           media = new MessageMedia(
             mimetype,
@@ -130,12 +122,7 @@ const resolvers = {
 
         const footer = '> Powered by Integrate Soluciones Informáticas'
 
-        const options = {
-          media: media,
-          footer: footer,
-        }
-
-        await bots[userId].sendMessage(to, text, options)
+        await bots[userId].sendMessage(to, text, { media, footer })
         return true
       } catch (error) {
         console.error(`Error al enviar mensaje: ${(error as Error).message}`)
@@ -143,7 +130,7 @@ const resolvers = {
       }
     },
     logout: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username })
+      const user = await User.findOne({ username: username.toLowerCase() })
       if (!user) throw new Error('Usuario no encontrado')
 
       const userId = user._id.toString()
@@ -153,20 +140,43 @@ const resolvers = {
       }
       return true
     },
+    forceReset: async (_: any, { username }: { username: string }) => {
+      const user = await User.findOne({ username: username.toLowerCase() })
+      if (!user) throw new Error('Usuario no encontrado')
+
+      const userId = user._id.toString()
+      if (!bots[userId]) {
+        bots[userId] = new WhatsAppBot(userId)
+      }
+
+      try {
+        await bots[userId].forceReset()
+        return true
+      } catch (error) {
+        console.error(
+          `Error al reiniciar el bot para el usuario ${username}: ${(error as Error).message}`,
+        )
+        throw new Error('No se pudo reiniciar el bot. Por favor, intente nuevamente.')
+      }
+    },
   },
 }
 
-// Función para verificar inactividad periódicamente
 const checkInactivity = async () => {
   for (const userId in bots) {
-    const isInactive = await bots[userId].checkInactivity()
-    if (isInactive) {
-      delete bots[userId]
+    try {
+      const isInactive = await bots[userId].checkInactivity()
+      if (isInactive) {
+        delete bots[userId]
+      }
+    } catch (error) {
+      console.error(
+        `Error al verificar inactividad para el usuario ${userId}: ${(error as Error).message}`,
+      )
     }
   }
 }
 
-// Ejecutar la verificación de inactividad cada hora
 setInterval(checkInactivity, 60 * 60 * 1000)
 
 export default resolvers
