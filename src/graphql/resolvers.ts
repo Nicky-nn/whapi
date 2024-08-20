@@ -377,6 +377,8 @@ const resolvers = {
             finalFileName = fileName || `Video_${Date.now()}.mp4`
           } else if (mediaType === 'audio') {
             finalFileName = fileName || `Audio_${Date.now()}.mp3`
+          } else if (mediaType === 'document') {
+            finalFileName = fileName || `Documento_${Date.now()}.pdf`
           }
 
           media = new MessageMedia(
@@ -386,7 +388,7 @@ const resolvers = {
           )
         }
 
-        const footer = '> Powered by Integrate Soluciones Informáticas'
+        const footer = '> Powered by INTEGRATE Soluciones Informáticas'
         await bots[userId].sendMessage(to, text, { media, footer })
         return true
       } catch (error) {
@@ -400,9 +402,24 @@ const resolvers = {
 
       const userId = user._id.toString()
       if (bots[userId]) {
-        await bots[userId].logout()
-        delete bots[userId]
+        try {
+          await bots[userId].logout()
+          delete bots[userId]
+        } catch (error) {
+          console.error(`Error al cerrar sesión para el usuario ${userId}:`, error)
+          // Intenta cerrar la sesión de manera forzada
+          await bots[userId].forceLogout()
+          delete bots[userId]
+        }
+      } else {
+        // Si no se encontró la instancia del bot, busca la sesión de WhatsApp en la base de datos
+        const session = await WhatsAppSession.findOne({ userId: userId })
+        if (session) {
+          // Cierra la sesión de WhatsApp en la base de datos
+          await session.updateOne({ isConnected: false })
+        }
       }
+
       return true
     },
 

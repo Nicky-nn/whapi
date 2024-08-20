@@ -1,8 +1,11 @@
 import mongoose from 'mongoose'
+import { v4 as uuidv4 } from 'uuid'
+import User from './models/User'
 
 interface Database {
   name: string
 }
+
 const connectDB = async (): Promise<void> => {
   try {
     // Conectar a MongoDB
@@ -11,7 +14,7 @@ const connectDB = async (): Promise<void> => {
     // Verificar la conexión
     const db = mongoose.connection
     db.once('open', () => {
-      console.log('Conexión establecida con MongoDB')
+      console.info('Conexión establecida con MongoDB')
     })
 
     // Verificar si la base de datos está disponible
@@ -26,15 +29,46 @@ const connectDB = async (): Promise<void> => {
 
     const dbExists = databases.some((database: Database) => database.name === dbName)
     if (!dbExists) {
-      console.log(
-        `La base de datos "${dbName}" está disponible. Se creará automáticamente al insertar datos.`
+      console.info(
+        `La base de datos "${dbName}" está disponible. Se creará automáticamente al insertar datos.`,
       )
     } else {
-      console.log(`La base de datos "${dbName}" ya existe.`)
+      console.info(`La base de datos "${dbName}" ya existe.`)
     }
+
+    // Crear SuperAdmin por defecto si no existe
+    await createDefaultSuperAdmin()
   } catch (error) {
     console.error('Error al conectar a MongoDB:', error)
     process.exit(1)
+  }
+}
+
+const createDefaultSuperAdmin = async () => {
+  try {
+    const existingSuperAdmin = await User.findOne({ role: 'SUPER_ADMIN' })
+    if (existingSuperAdmin) {
+      console.info('Ya existe un SuperAdmin en la base de datos.')
+      return
+    }
+
+    const defaultSuperAdmin = new User({
+      username: 'superadmin',
+      email: 'superadmin@example.com',
+      password: "superadmin",
+      nombres: 'Super',
+      apellidos: 'Admin',
+      role: 'SUPER_ADMIN',
+      isActive: true,
+      whatsappConnected: false,
+      token: uuidv4(),
+    })
+
+    await defaultSuperAdmin.save()
+    console.info('SuperAdmin por defecto creado exitosamente.')
+    console.info('Token:', defaultSuperAdmin.token)
+  } catch (error) {
+    console.error('Error al crear el SuperAdmin por defecto:', error)
   }
 }
 

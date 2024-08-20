@@ -202,6 +202,21 @@ class WhatsAppBot {
     console.log(`Datos del usuario ${this.userId} eliminados de la base de datos.`)
     // Aquí puedes añadir código adicional para eliminar datos locales si es necesario.
   }
+  // Agrega este método a la clase WhatsAppBot
+  public async forceLogout() {
+    try {
+      await this.client.destroy()
+    } catch (error) {
+      console.error(
+        `Error al cerrar sesión de forma forzada para el usuario ${this.userId}:`,
+        error,
+      )
+    } finally {
+      this.isReady = false
+      await this.updateSessionStatus(false)
+      console.log(`Sesión cerrada de forma forzada para el usuario: ${this.userId}`)
+    }
+  }
 }
 
 export default WhatsAppBot

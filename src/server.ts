@@ -5,34 +5,54 @@ import { ApolloServerPluginLandingPageGraphQLPlayground } from 'apollo-server-co
 import connectDB from './database'
 import typeDefs from './graphql/schema'
 import resolvers from './graphql/resolvers'
+import { context } from './middleware/auth'
+
+// Función para imprimir arte ASCII con colores
+const printWelcomeMessage = () => {
+  const asciiArt = `
+██╗    ██╗██╗  ██╗ █████╗ ██████╗ ██╗
+██║    ██║██║  ██║██╔══██╗██╔══██╗██║
+██║ █╗ ██║███████║███████║██████╔╝██║
+██║███╗██║██╔══██║██╔══██║██╔═══╝ ██║
+╚███╔███╔╝██║  ██║██║  ██║██║     ██║
+ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝
+
+ by Nick Russell
+  `
+
+  // Códigos de color ANSI
+  const blue = '\x1b[34m'
+  const green = '\x1b[32m'
+  const reset = '\x1b[0m'
+
+  console.log(`${blue}${asciiArt}${reset}`)
+  console.log(`${green}Servidor GraphQL corriendo...${reset}`)
+}
 
 const startServer = async (): Promise<void> => {
   const app = express()
 
-  // Conectar a la base de datos
+  // Conectar a la base de datos y crear SuperAdmin
   await connectDB()
 
   // Crear el servidor Apollo
   const server = new ApolloServer({
     typeDefs,
     resolvers,
-    introspection: true, // Habilitar introspección para desarrollo
-    plugins: [
-      ApolloServerPluginLandingPageGraphQLPlayground(), // Esto reemplaza 'playground: true'
-    ],
+    context, // Pasar el contexto de autenticación al servidor Apollo
+    introspection: true,
+    plugins: [ApolloServerPluginLandingPageGraphQLPlayground()],
   })
 
   // Iniciar el servidor Apollo
   await server.start()
-
-  // Aplicar el middleware de Apollo Server
   server.applyMiddleware({ app, path: '/whapi' })
 
   const PORT = process.env.PORT || 4000
   app.listen(PORT, () => {
-    console.log(`Servidor corriendo en puerto ${PORT}${server.graphqlPath}`)
+    printWelcomeMessage()
+    console.log(`🚀 Servidor corriendo en puerto ${PORT}${server.graphqlPath}`)
   })
 }
 
-// Ejecutar la función para iniciar el servidor
 startServer()
