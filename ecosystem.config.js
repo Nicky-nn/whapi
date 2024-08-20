@@ -8,12 +8,12 @@ module.exports = {
       exec_mode: 'cluster',
       env: {
         NODE_ENV: 'development',
-        MONGODB_URI: 'mongodb://localhost:27017/whatsapp-bot-db',
+        MONGODB_URI: 'mongodb://localhost:27017/whapi',
         PORT: 4000,
       },
       env_production: {
         NODE_ENV: 'production',
-        MONGODB_URI: 'mongodb://localhost:27017/whatsapp-bot-db',
+        MONGODB_URI: 'mongodb://localhost:27017/whapi',
         PORT: 4000,
       },
     },
