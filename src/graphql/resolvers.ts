@@ -81,7 +81,7 @@ const resolvers = {
     },
 
     getUser: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username: username.toLowerCase() })
+      const user = await User.findOne({ username: username.trim() })
       if (!user) throw new Error('Usuario no encontrado')
       const whatsAppSession = await WhatsAppSession.findOne({ userId: user._id })
       return {
@@ -97,8 +97,7 @@ const resolvers = {
       }
     },
     getQRCode: async (_: any, { username }: { username: string }) => {
-      // Buscar el usuario por nombre de usuario
-      const user = await User.findOne({ username: username.toLowerCase() })
+      const user = await User.findOne({ username: username.trim() })
       if (!user) throw new Error('Usuario no encontrado')
 
       // Verificar si el usuario está activo
@@ -124,7 +123,7 @@ const resolvers = {
       return bots[userId].getQRCode()
     },
     needsQRCode: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username: username.toLowerCase() })
+      const user = await User.findOne({ username: username.trim() })
       if (!user) throw new Error('Usuario no encontrado')
       const whatsAppSession = await WhatsAppSession.findOne({ userId: user._id })
       return !whatsAppSession || !whatsAppSession.isConnected
@@ -132,9 +131,7 @@ const resolvers = {
   },
   Mutation: {
     login: async (_: any, { username, password }: Login) => {
-      // Buscar al usuario en la base de datos
-      const user = await User.findOne({ username })
-      // Verificar si el usuario existe
+      const user = await User.findOne({ username: username.trim() })
       if (!user) throw new AuthenticationError('Credenciales inválidas')
       // Comparar la contraseña proporcionada con el hash almacenado
       const isValid = await bcrypt.compare(password, user.password)
@@ -168,11 +165,11 @@ const resolvers = {
       },
     ) => {
       const existingUser = await User.findOne({
-        $or: [{ email }, { username: nombreDeUsuario }],
+        $or: [{ email }, { username: nombreDeUsuario.trim() }],
       })
       if (existingUser) throw new Error('El email o nombre de usuario ya está registrado')
       const newAdmin = new User({
-        username: nombreDeUsuario,
+        username: nombreDeUsuario.trim(),
         email,
         password,
         nombres,
@@ -207,12 +204,12 @@ const resolvers = {
       }
 
       const existingUser = await User.findOne({
-        $or: [{ email }, { username: nombreDeUsuario }],
+        $or: [{ email }, { username: nombreDeUsuario.trim() }],
       })
       if (existingUser) throw new Error('El email o username ya está en uso')
 
       const newSuperAdmin = new User({
-        username: nombreDeUsuario,
+        username: nombreDeUsuario.trim(),
         email,
         password,
         nombres,
@@ -277,7 +274,7 @@ const resolvers = {
 
       // Verificar si el email o username ya están en uso
       const existingUser = await User.findOne({
-        $or: [{ email }, { username: nombreDeUsuario }],
+        $or: [{ email }, { username: nombreDeUsuario.trim() }],
       })
       if (existingUser) throw new Error('El email o username ya está en uso')
 
@@ -287,7 +284,7 @@ const resolvers = {
         password,
         nombres,
         apellidos,
-        username: nombreDeUsuario,
+        username: nombreDeUsuario.trim(),
         role: 'USER',
         isActive: true,
         createdBy: context.user.id,
@@ -299,7 +296,7 @@ const resolvers = {
     },
 
     deleteAccount: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username: username.toLowerCase() })
+      const user = await User.findOne({ username: username.trim() })
       if (!user) throw new Error('Usuario no encontrado')
 
       const userId = user._id.toString()
@@ -308,7 +305,7 @@ const resolvers = {
         delete bots[userId]
       }
 
-      await User.findOneAndDelete({ username: username.toLowerCase() })
+      await User.findOneAndDelete({ username: username.trim() })
       return true
     },
 
@@ -330,8 +327,7 @@ const resolvers = {
         fileName?: string
       },
     ) => {
-      // Buscar el usuario
-      const user = await User.findOne({ username: username.toLowerCase() })
+      const user = await User.findOne({ username: username.trim() })
       if (!user) throw new Error('Usuario no encontrado')
 
       // Verificar si el usuario está activo
@@ -397,7 +393,7 @@ const resolvers = {
       }
     },
     logout: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username: username.toLowerCase() })
+      const user = await User.findOne({ username: username.trim() })
       if (!user) throw new Error('Usuario no encontrado')
 
       const userId = user._id.toString()
@@ -424,7 +420,7 @@ const resolvers = {
     },
 
     forceReset: async (_: any, { username }: { username: string }) => {
-      const user = await User.findOne({ username: username.toLowerCase() })
+      const user = await User.findOne({ username: username.trim() })
       if (!user) throw new Error('Usuario no encontrado')
 
       const userId = user._id.toString()
